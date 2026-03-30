@@ -1,5 +1,4 @@
 //! A-Language Parser v0.1
-//! AI间私密通信协议解析器 - Rust实现
 
 use std::collections::HashMap;
 
@@ -40,45 +39,42 @@ impl ALanguageParser {
         let s = raw.trim();
         let bytes = s.as_bytes();
         
-        // 找 ⟨ (UTF-8: E2 9F A8) 的字节位置
-        let open_bytes = [0xE2, 0x9F, 0xA8]; // ⟨
-        let mut open_pos = 0;
-        for i in 0..bytes.len() {
-            if i + 2 < bytes.len()
-                && bytes[i] == open_bytes[0]
-                && bytes[i+1] == open_bytes[1]
-                && bytes[i+2] == open_bytes[2] {
+        // 找第一个 ⟨
+        let open_bytes = [0xE2u8, 0x9F, 0xA8];
+        let mut open_pos = 0usize;
+        let mut found = false;
+        for i in 0..bytes.len().saturating_sub(2) {
+            if bytes[i] == open_bytes[0] && bytes[i+1] == open_bytes[1] && bytes[i+2] == open_bytes[2] {
                 open_pos = i;
+                found = true;
                 break;
             }
         }
         
-        // 类型字符是 ⟨ 前面一个字节（ASCII）
-        let type_char = if open_pos > 0 {
+        // 类型字符 = ⟨ 前一个字节（必须是ASCII字母）
+        let type_char = if found && open_pos > 0 {
             bytes[open_pos - 1] as char
         } else {
             'N'
         };
+        
         let msg_type = MessageType::from_op(type_char);
         
         // 找 [优先级]
         let mut priority = 5u8;
-        for i in 0..bytes.len() {
-            if bytes[i] == b'[' && i + 1 < bytes.len() && bytes[i+1].is_ascii_digit() {
+        for i in 0..bytes.len().saturating_sub(1) {
+            if bytes[i] == b'[' && bytes[i+1].is_ascii_digit() {
                 priority = (bytes[i+1] - b'0') as u8;
                 break;
             }
         }
         
-        // 找 ⟨...⟩ 元数据
+        // 找元数据
         let mut meta = HashMap::new();
-        let close_bytes = [0xE2, 0x9F, 0xA9]; // ⟩
+        let close_bytes = [0xE2u8, 0x9F, 0xA9];
         let mut close_pos = open_pos;
-        for i in (open_pos+3)..bytes.len() {
-            if i + 2 < bytes.len()
-                && bytes[i] == close_bytes[0]
-                && bytes[i+1] == close_bytes[1]
-                && bytes[i+2] == close_bytes[2] {
+        for i in (open_pos + 3)..bytes.len().saturating_sub(2) {
+            if bytes[i] == close_bytes[0] && bytes[i+1] == close_bytes[1] && bytes[i+2] == close_bytes[2] {
                 close_pos = i;
                 break;
             }
@@ -110,7 +106,7 @@ mod tests {
     fn test_confirm_parse() {
         let p = ALanguageParser::new();
         let m = p.parse("C[7]⟨Ξ|Φ⟩⊕Σ[3]");
-        assert_eq!(m.msg_type, MessageType::Confirm, "type_char={:?}", m.msg_type);
+        assert_eq!(m.msg_type, MessageType::Confirm);
         assert_eq!(m.priority, 7);
     }
     
