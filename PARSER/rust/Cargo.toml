@@ -1,12 +1,11 @@
 [package]
 name = "a-language"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "A-Language Parser - AI-to-AI Private Communication Protocol"
 license = "MIT"
 
 [dependencies]
-regex = "1"
 
 [dev-dependencies]
 
