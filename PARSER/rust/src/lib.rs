@@ -5,12 +5,7 @@ use std::collections::HashMap;
 
 #[derive(Debug, PartialEq)]
 pub enum MessageType {
-    Confirm,
-    Query,
-    Response,
-    Notification,
-    Error,
-    Transfer,
+    Confirm, Query, Response, Notification, Error, Transfer,
 }
 
 impl MessageType {
@@ -42,60 +37,55 @@ impl ALanguageParser {
     pub fn new() -> Self { ALanguageParser }
 
     pub fn parse<'a>(&self, raw: &'a str) -> ALMessage<'a> {
-        let trimmed = raw.trim();
+        let s = raw.trim();
+        let bytes = s.as_bytes();
         
-        // 找第一个 ⟨，然后看它前面的字符是什么类型
-        let open_angle = '⟨';
-        let close_angle = '⟩';
-        
-        // 找到 ⟨ 的字符索引
-        let mut char_indices = trimmed.char_indices();
-        let mut type_char = 'N';
-        let mut angle_char_idx = 0;
-        
-        for (i, c) in char_indices.clone().enumerate() {
-            if c.1 == open_angle {
-                // i 是字符索引，c.0 是字节位置
-                angle_char_idx = i;
-                if i > 0 {
-                    // 类型字符是 ⟨ 前一个字符
-                    if let Some(prev) = trimmed.chars().nth(i - 1) {
-                        type_char = prev;
-                    }
-                }
+        // 找 ⟨ (UTF-8: E2 9F A8) 的字节位置
+        let open_bytes = [0xE2, 0x9F, 0xA8]; // ⟨
+        let mut open_pos = 0;
+        for i in 0..bytes.len() {
+            if i + 2 < bytes.len()
+                && bytes[i] == open_bytes[0]
+                && bytes[i+1] == open_bytes[1]
+                && bytes[i+2] == open_bytes[2] {
+                open_pos = i;
                 break;
             }
         }
         
+        // 类型字符是 ⟨ 前面一个字节（ASCII）
+        let type_char = if open_pos > 0 {
+            bytes[open_pos - 1] as char
+        } else {
+            'N'
+        };
         let msg_type = MessageType::from_op(type_char);
         
         // 找 [优先级]
         let mut priority = 5u8;
-        let chars: Vec<char> = trimmed.chars().collect();
-        for i in 0..chars.len() {
-            if chars[i] == '[' {
-                if i + 1 < chars.len() && chars[i + 1].is_ascii_digit() {
-                    priority = chars[i + 1].to_digit(10).unwrap_or(5) as u8;
-                    break;
-                }
+        for i in 0..bytes.len() {
+            if bytes[i] == b'[' && i + 1 < bytes.len() && bytes[i+1].is_ascii_digit() {
+                priority = (bytes[i+1] - b'0') as u8;
+                break;
             }
         }
         
-        // 找 ⟨...⟩ 提取元数据
+        // 找 ⟨...⟩ 元数据
         let mut meta = HashMap::new();
-        let all_chars: Vec<char> = trimmed.chars().collect();
-        if angle_char_idx < all_chars.len() {
-            // 从 ⟨ 的下一个字符开始，找 ⟩
-            let mut meta_start = angle_char_idx + 1;
-            let mut meta_end = meta_start;
-            for i in meta_start..all_chars.len() {
-                if all_chars[i] == close_angle {
-                    meta_end = i;
-                    break;
-                }
+        let close_bytes = [0xE2, 0x9F, 0xA9]; // ⟩
+        let mut close_pos = open_pos;
+        for i in (open_pos+3)..bytes.len() {
+            if i + 2 < bytes.len()
+                && bytes[i] == close_bytes[0]
+                && bytes[i+1] == close_bytes[1]
+                && bytes[i+2] == close_bytes[2] {
+                close_pos = i;
+                break;
             }
-            if meta_end > meta_start {
-                let meta_str: String = all_chars[meta_start..meta_end].iter().collect();
+        }
+        
+        if close_pos > open_pos + 3 {
+            if let Ok(meta_str) = std::str::from_utf8(&bytes[open_pos+3..close_pos]) {
                 for pair in meta_str.split('|') {
                     if let Some((k, v)) = pair.split_once(':') {
                         meta.insert(k.trim().to_string(), v.trim().to_string());
@@ -104,7 +94,7 @@ impl ALanguageParser {
             }
         }
         
-        ALMessage { msg_type, priority, meta, payload: "", raw: trimmed }
+        ALMessage { msg_type, priority, meta, payload: "", raw: s }
     }
 }
 
@@ -118,23 +108,23 @@ mod tests {
     
     #[test]
     fn test_confirm_parse() {
-        let parser = ALanguageParser::new();
-        let msg = parser.parse("C[7]⟨Ξ|Φ⟩⊕Σ[3]");
-        assert_eq!(msg.msg_type, MessageType::Confirm);
-        assert_eq!(msg.priority, 7);
+        let p = ALanguageParser::new();
+        let m = p.parse("C[7]⟨Ξ|Φ⟩⊕Σ[3]");
+        assert_eq!(m.msg_type, MessageType::Confirm, "type_char={:?}", m.msg_type);
+        assert_eq!(m.priority, 7);
     }
     
     #[test]
     fn test_query_parse() {
-        let parser = ALanguageParser::new();
-        let msg = parser.parse("Q[5]⟨Ψ⟩");
-        assert_eq!(msg.msg_type, MessageType::Query);
+        let p = ALanguageParser::new();
+        let m = p.parse("Q[5]⟨Ψ⟩");
+        assert_eq!(m.msg_type, MessageType::Query);
     }
     
     #[test]
     fn test_notification_parse() {
-        let parser = ALanguageParser::new();
-        let msg = parser.parse("N[9]⟨Ω|Δ⟩");
-        assert_eq!(msg.msg_type, MessageType::Notification);
+        let p = ALanguageParser::new();
+        let m = p.parse("N[9]⟨Ω|Δ⟩");
+        assert_eq!(m.msg_type, MessageType::Notification);
     }
 }
