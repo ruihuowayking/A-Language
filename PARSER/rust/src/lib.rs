@@ -1,17 +1,16 @@
 //! A-Language Parser v0.1
 //! AI间私密通信协议解析器 - Rust实现
 
-use regex::Regex;
 use std::collections::HashMap;
 
 #[derive(Debug, PartialEq)]
 pub enum MessageType {
-    Confirm,     // C
-    Query,       // Q
-    Response,    // R
-    Notification,// N
-    Error,       // E
-    Transfer,    // T
+    Confirm,
+    Query,
+    Response,
+    Notification,
+    Error,
+    Transfer,
 }
 
 impl MessageType {
@@ -40,37 +39,43 @@ pub struct ALMessage<'a> {
 pub struct ALanguageParser;
 
 impl ALanguageParser {
-    pub fn new() -> Self {
-        ALanguageParser
-    }
+    pub fn new() -> Self { ALanguageParser }
 
     pub fn parse<'a>(&self, raw: &'a str) -> ALMessage<'a> {
         let trimmed = raw.trim();
         
-        // 消息类型: C在⟨前面，所以要找C在⟨之前的模式
-        let type_re = Regex::new(r"([CQRNTE])⟨").unwrap();
-        let msg_type = type_re
-            .captures(trimmed)
-            .and_then(|c| c.get(1))
-            .map(|m| MessageType::from_op(m.as_str().chars().next().unwrap()))
-            .unwrap_or(MessageType::Notification);
+        // 找 ⟨符号 的位置，类型字母在它前面
+        let open_angle = "⟨";
         
-        // 优先级: [0-9]
-        let priority_re = Regex::new(r"\[(\d)\]").unwrap();
-        let priority = priority_re
-            .captures(trimmed)
-            .and_then(|c| c.get(1))
-            .and_then(|m| m.as_str().parse().ok())
-            .unwrap_or(5);
+        // 找到第一个 ⟨，类型字母就在它前面
+        let type_idx = match trimmed.find(open_angle) {
+            Some(idx) if idx > 0 => idx - 1,
+            _ => 0,
+        };
+        let type_char = trimmed.chars().nth(type_idx).unwrap_or('N');
+        let msg_type = MessageType::from_op(type_char);
         
-        // 元数据: ⟨...⟩
-        let meta_re = Regex::new(r"⟨([^⟩]+)⟩").unwrap();
+        // 找 [优先级]
+        let mut priority = 5u8;
+        if let Some(start) = trimmed.find('[') {
+            if let Some(end) = trimmed.find(']') {
+                if end > start {
+                    priority = trimmed[start+1..end].parse().unwrap_or(5);
+                }
+            }
+        }
+        
+        // 找 ⟨...⟩ 提取元数据
         let mut meta = HashMap::new();
-        if let Some(caps) = meta_re.captures(trimmed) {
-            let meta_str = caps.get(1).unwrap().as_str();
-            for pair in meta_str.split('|') {
-                if let Some((k, v)) = pair.split_once('|') {
-                    meta.insert(k.to_string(), v.to_string());
+        if let Some(start) = trimmed.find(open_angle) {
+            if let Some(end) = trimmed.find("⟩") {
+                if end > start + 3 {
+                    let meta_str = &trimmed[start+1..end];
+                    for pair in meta_str.split('|') {
+                        if let Some((k, v)) = pair.split_once(':') {
+                            meta.insert(k.to_string(), v.to_string());
+                        }
+                    }
                 }
             }
         }
