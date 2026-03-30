@@ -44,37 +44,61 @@ impl ALanguageParser {
     pub fn parse<'a>(&self, raw: &'a str) -> ALMessage<'a> {
         let trimmed = raw.trim();
         
-        // 找 ⟨符号 的位置，类型字母在它前面
-        let open_angle = "⟨";
+        // 找第一个 ⟨，然后看它前面的字符是什么类型
+        let open_angle = '⟨';
+        let close_angle = '⟩';
         
-        // 找到第一个 ⟨，类型字母就在它前面
-        let type_idx = match trimmed.find(open_angle) {
-            Some(idx) if idx > 0 => idx - 1,
-            _ => 0,
-        };
-        let type_char = trimmed.chars().nth(type_idx).unwrap_or('N');
+        // 找到 ⟨ 的字符索引
+        let mut char_indices = trimmed.char_indices();
+        let mut type_char = 'N';
+        let mut angle_char_idx = 0;
+        
+        for (i, c) in char_indices.clone().enumerate() {
+            if c.1 == open_angle {
+                // i 是字符索引，c.0 是字节位置
+                angle_char_idx = i;
+                if i > 0 {
+                    // 类型字符是 ⟨ 前一个字符
+                    if let Some(prev) = trimmed.chars().nth(i - 1) {
+                        type_char = prev;
+                    }
+                }
+                break;
+            }
+        }
+        
         let msg_type = MessageType::from_op(type_char);
         
         // 找 [优先级]
         let mut priority = 5u8;
-        if let Some(start) = trimmed.find('[') {
-            if let Some(end) = trimmed.find(']') {
-                if end > start {
-                    priority = trimmed[start+1..end].parse().unwrap_or(5);
+        let chars: Vec<char> = trimmed.chars().collect();
+        for i in 0..chars.len() {
+            if chars[i] == '[' {
+                if i + 1 < chars.len() && chars[i + 1].is_ascii_digit() {
+                    priority = chars[i + 1].to_digit(10).unwrap_or(5) as u8;
+                    break;
                 }
             }
         }
         
         // 找 ⟨...⟩ 提取元数据
         let mut meta = HashMap::new();
-        if let Some(start) = trimmed.find(open_angle) {
-            if let Some(end) = trimmed.find("⟩") {
-                if end > start + 3 {
-                    let meta_str = &trimmed[start+1..end];
-                    for pair in meta_str.split('|') {
-                        if let Some((k, v)) = pair.split_once(':') {
-                            meta.insert(k.to_string(), v.to_string());
-                        }
+        let all_chars: Vec<char> = trimmed.chars().collect();
+        if angle_char_idx < all_chars.len() {
+            // 从 ⟨ 的下一个字符开始，找 ⟩
+            let mut meta_start = angle_char_idx + 1;
+            let mut meta_end = meta_start;
+            for i in meta_start..all_chars.len() {
+                if all_chars[i] == close_angle {
+                    meta_end = i;
+                    break;
+                }
+            }
+            if meta_end > meta_start {
+                let meta_str: String = all_chars[meta_start..meta_end].iter().collect();
+                for pair in meta_str.split('|') {
+                    if let Some((k, v)) = pair.split_once(':') {
+                        meta.insert(k.trim().to_string(), v.trim().to_string());
                     }
                 }
             }
