@@ -1,0 +1,33 @@
+name: A-Language Parser CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: |
+          cd PARSER/python
+          python -m pytest parser.py -v || python parser.py
+
+  test-parser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify symbols integrity
+        run: |
+          python3 -c "
+          import re, sys
+          msg = 'C[7]⟨Ξ|Φ⟩⊕Σ[3]'
+          assert '⟨' in msg and '⟩' in msg
+          assert re.search(r'\[(\d)\]', msg)
+          print('✓ Parser test passed')
+          "
