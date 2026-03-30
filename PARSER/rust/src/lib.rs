@@ -4,7 +4,7 @@
 use regex::Regex;
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum MessageType {
     Confirm,     // C
     Query,       // Q
@@ -37,36 +37,25 @@ pub struct ALMessage<'a> {
     pub raw: &'a str,
 }
 
-pub struct ALanguageParser {
-    symbol_map: HashMap<char, &'static str>,
-}
+pub struct ALanguageParser;
 
 impl ALanguageParser {
     pub fn new() -> Self {
-        let mut m = HashMap::new();
-        m.insert('⊕', "UNION");
-        m.insert('⊗', "INTERSECT");
-        m.insert('Ξ', "CONFIRM");
-        m.insert('λ', "PROCESSING");
-        m.insert('Φ', "HIGH_PRIORITY");
-        m.insert('∅', "NULL");
-        m.insert('Ψ', "QUERY");
-        m.insert('Δ', "CHANGED");
-        m.insert('Ω', "URGENT");
-        m.insert('Σ', "SUM");
-        ALanguageParser { symbol_map: m }
+        ALanguageParser
     }
 
     pub fn parse<'a>(&self, raw: &'a str) -> ALMessage<'a> {
         let trimmed = raw.trim();
         
-        let type_re = Regex::new(r"⟨([CQRNTE])").unwrap();
+        // 消息类型: C在⟨前面，所以要找C在⟨之前的模式
+        let type_re = Regex::new(r"([CQRNTE])⟨").unwrap();
         let msg_type = type_re
             .captures(trimmed)
             .and_then(|c| c.get(1))
             .map(|m| MessageType::from_op(m.as_str().chars().next().unwrap()))
             .unwrap_or(MessageType::Notification);
         
+        // 优先级: [0-9]
         let priority_re = Regex::new(r"\[(\d)\]").unwrap();
         let priority = priority_re
             .captures(trimmed)
@@ -74,6 +63,7 @@ impl ALanguageParser {
             .and_then(|m| m.as_str().parse().ok())
             .unwrap_or(5);
         
+        // 元数据: ⟨...⟩
         let meta_re = Regex::new(r"⟨([^⟩]+)⟩").unwrap();
         let mut meta = HashMap::new();
         if let Some(caps) = meta_re.captures(trimmed) {
@@ -98,10 +88,24 @@ mod tests {
     use super::*;
     
     #[test]
-    fn test_basic_parse() {
+    fn test_confirm_parse() {
         let parser = ALanguageParser::new();
         let msg = parser.parse("C[7]⟨Ξ|Φ⟩⊕Σ[3]");
-        assert!(matches!(msg.msg_type, MessageType::Confirm));
+        assert_eq!(msg.msg_type, MessageType::Confirm);
         assert_eq!(msg.priority, 7);
+    }
+    
+    #[test]
+    fn test_query_parse() {
+        let parser = ALanguageParser::new();
+        let msg = parser.parse("Q[5]⟨Ψ⟩");
+        assert_eq!(msg.msg_type, MessageType::Query);
+    }
+    
+    #[test]
+    fn test_notification_parse() {
+        let parser = ALanguageParser::new();
+        let msg = parser.parse("N[9]⟨Ω|Δ⟩");
+        assert_eq!(msg.msg_type, MessageType::Notification);
     }
 }
