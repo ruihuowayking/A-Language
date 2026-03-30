@@ -1,0 +1,14 @@
+[package]
+name = "a-language"
+version = "0.1.0"
+edition = "2021"
+description = "A-Language Parser - AI-to-AI Private Communication Protocol"
+license = "MIT"
+
+[dependencies]
+regex = "1"
+
+[dev-dependencies]
+
+[profile.release]
+opt-level = 3
