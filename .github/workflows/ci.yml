@@ -1,0 +1,42 @@
+name: A-Language CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Run Python Parser tests
+        run: |
+          cd PARSER/python
+          python3 parser.py
+
+  test-javascript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run JS Parser tests
+        run: |
+          cd PARSER/javascript
+          node parser.js
+
+  test-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run Rust Parser tests
+        run: |
+          cd PARSER/rust
+          cargo test --quiet
